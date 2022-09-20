@@ -1,0 +1,229 @@
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="" />
+    <meta name="author" content="Maxim Sokhatsky" />
+    <title>2019-04-13</title>
+    <link rel="stylesheet" href="https://forms.n2o.dev/priv/static/css/forms.css?v=1" />
+    <link rel="stylesheet" href="https://n2o.dev/blank.css" />
+    <link rel="stylesheet" href="../../journal.css" />
+</head>
+<body>
+<nav>
+    <a href='../../index.html'>5HT</a>
+    <a href='../index.html'>TOP</a>
+    <a href='#'>2019-04-13</a>
+</nav>
+<main>
+    <section>
+        <h3>Новая версия KVS 6.4</h3>
+        <p>KVS — это слой абстракции состоящий из двух частей: базового АПИ и АПИ управления стримами,
+           тейк, дроп, фолд, катаморфизм, как вы любите. Основное АПИ в модуле kvs,
+           а стримовое в kvs_stream. Пользуясь случаем хочу пропиарить похожие решения
+           в области хранения данных на эрланге: <a href="https://github.com/fogfish/datum">datum</a> и серия библиотек
+           от Дмитрия Колесникова, <a href="https://github.com/emqx/replayq">replayq</a> от Фенга Ли,
+           а также немногих других, кто пытался абстрактно решить проблему.</p>
+
+         <h3>Why KVS?</h3>
+
+         <p>Предназначение KVS:</p>
+         <p>— предоставление интерфейса абстрагирования широкого спектра хранилищ;<br>
+            — предоставление удобного Эрланг REPL интерфейса для работы с рекордами;<br>
+            — разделение на базовый (get put) и стрим интерфейс итераторов (next prev);<br>
+            — набор драйверов (внутренняя база, внешняя база и файловая система);<br>
+            — слои данных: файловая система, цепочки сообщений, банковские транзакции, деревья
+              подписей, трейсы бизнес-процессов, блокчейны, системы очередей,
+              тайм сириес, вот это всё.<br>
+        </p>
+         <p>Начиная с легковесной модификации KVS сменила название, теперь это "Абстрактная База Цепочек",
+            а не "Абстрактная База Термов", так как выделилось отдельное стрим АПИ.</p>
+
+         <p>— <a href="https://github.com/synrc/kvs">synrc/kvs</a> — 6.4<br></p>
+
+        <p> Расскажем немного про теоретические основы KVS. Эта библиотека позволяет или должна
+            позволять хранить и извлекать любого вида структуры предоставляя семантику управления
+            курсорами next prev, которой обладают деревья. Поэтому можно сказать что это интерфейс
+            оператора к цепочным и древовидным хранилищам. В своей основе KVS поддерживает три
+            механизма хранения цепочек:</p>
+         <p>1) первый способ, двусвязные списки, явный, где next и prev указатели
+               непосредственным образом присутствуют в данных, подходит
+               даже для управления деревьями;</p>
+         <p>2) второй, явный, где есть только next, этот способ подходит для списков,
+               много людей спрашивают про этот способ, но мы его не использовали
+               никогда и имплементации под рукой нет;</p>
+         <p>3) и третий, не явный способ, где записи встраиваются в существующий индекс,
+               т.е. btree таблицу, zero-overhead.</p>
+
+         <p>В каком-то смысле первый и второй способы реализуют определённый слой поверх KVS,
+            так как kvs_stream работает с любыми стораджами полиморфно, а вот kvs_st драйвер
+            стримов сделан специально для rocksdb.</p>
+
+        <h3>Деревья</h3>
+
+        <p>Двусвязные списки или деревья, первая модель, которая ложится прямо из С++ классов, при изучении программирования,
+           это хранить в базе прямые указатели, такая система хранения может даже использоваться
+           если integer поменять на pid, тогда можно будет точечно восстанавливать историю вызова.</p>
+
+        <figure>
+        <code>
+  -record(iter, { id    = [] :: [] | integer(),
+                  next  = [] :: [] | integer(),
+                  prev  = [] :: [] | integer() } ).
+        </code>
+        </figure>
+
+        <p>Первое поле любой таблицы — это ее имя, второе — id, третье и
+           четвертое next и prev (сигнатура бинарного ветвления).
+           Полиморфно по этим смещениям мы ожидаем наличие этих полей
+           для линковки данных в цепочки.
+           Базовая часть вместе называется #iter.</p>
+
+        <h4>kvs_stream — <b>#iter{}</b></h4>
+
+        <p> За полиморфное явное управление application level полями next prev рекорда #iter
+            отвечает модуль kvs_stream. Например файловая система не предоставляет управление
+            своими курсорами, поэтому имплементация fs требует линковочных полей.</p>
+
+        <h3>Списки</h3>
+        <p>Односвязные списки или просто списки, вторая модель. Всё тоже самое, но без возврата назад.
+           Не поддерживается пока ни одной версией KVS.</p>
+        <figure>
+        <code>
+  -record(ite, { id    = [] :: [] | integer(),
+                 next  = [] :: [] | integer() } ).
+        </code>
+        </figure>
+
+        <h4>kvs_stre — <b>#ite{}</b></h4>
+
+        <p>Этот модуль не имплементирован и рекорд не специфицирован.</p>
+
+        <h3>Встраивание в индекс</h3>
+
+        <p>Третья модель представляет собой прямой, более эффективный способ встраивания пространства бизнес-объектов
+           в пространство ключей нижлежащей таблицы, и передача управления курсорами BTree таблицы
+           сразу в драйвер, а не в ручной link walking как в было в riak.
+           Базовая часть полиморфных рекордов состоит только из имени таблицы
+           и id и имеет название #it. Эта модель используется в rocksdb бекенде, который появился в 6.4.</p>
+
+        <figure>
+        <code>
+  -record(it, { id = [] :: [] | integer() } ).
+        </code>
+        </figure>
+
+        <p>Таким образом, мы можем эмулировать таблицы, в рамках единого пространства ключей,
+           добавляя их как префиксы к ключу (little endian), который будет автоматически
+           отражаться в основном BTree дереве, но также в этом пространстве вы можете
+           хранить и фиды, т.е. стримы, например топики <b>/p2p/maxim/doxtop</b>.
+           Это требует специальной модификации kvs_st для работы с рекордом #it,
+           в отличии от двусвязного #iter который работает с драйвером kvs_stream.</p>
+
+        <h4>kvs_st — <b>#it{}</b></h4>
+
+        <p>За управление курсорами по итератору базы данных отвечает модуль kvs_st.</p>
+
+        <h3>На примере</h3>
+
+        <p>Пример кода, который показывет основную идею на примере драйвера rocksdb:</p>
+
+        <figure>
+        <code>
+1> {ok,Ref} = rocksdb:open("hey",[{create_if_missing,true}]).
+2> rocksdb:put(Ref, <<"/users/1">>,<<"maxim">>,[{sync,true}]).
+3> rocksdb:put(Ref, <<"/users/2">>,<<"doxtop">>,[{sync,true}]).
+4> rocksdb:put(Ref, <<"/users/3">>,<<"vlad">>,[{sync,true}]).
+5> rocksdb:put(Ref, <<"/staff/1">>,<<"vlad">>,[{sync,true}]).
+6> rocksdb:put(Ref, <<"/staff/2">>,<<"maxim">>,[{sync,true}]).
+7> rocksdb:put(Ref, <<"/staff/3">>,<<"doxtop">>,[{sync,true}]).
+8> {ok,I} = rocksdb:iterator(Ref,[]).
+9> rocksdb:iterator_move(I,{seek,<<"/staff/">>}).
+10> rocksdb:iterator_move(I,next).
+11> rocksdb:iterator_move(I,next).
+12> rocksdb:iterator_move(I,next).
+13> rocksdb:iterator_move(I,{seek,<<"/users/">>}).
+14> rocksdb:iterator_move(I,next).
+15> rocksdb:iterator_move(I,next).
+16> rocksdb:iterator_move(I,next).
+        </code>
+        </figure>
+
+      <h3>KVS REPL</h3>
+        <p>Теперь, что бы сделать тоже самое на KVS, вы можете сделать просто:</p>
+
+        <figure>
+        <code>
+1> kvs:ver().
+{version,"KVS ROCKSDB"}
+2> rr(kvs).
+[emails,id_seq,it,iter,kvs,reader,schema,table,writer]
+3> kvs:join().
+ok
+4> kvs:put(#emails{id=1,email="maxim"}).
+5> kvs:put(#emails{id=2,email="doxtop"}).
+6> kvs:put(#writer{id=2}).
+7> kvs:put(#writer{id=1}).
+8> kvs:all(writer).
+[#writer{id = 1,count = 0,cache = [],args = [],first = []},
+ #writer{id = 2,count = 0,cache = [],args = [],first = []}]
+9> kvs:all(emails).
+[#emails{id = 1,next = [],prev = [],email = "maxim"},
+ #emails{id = 2,next = [],prev = [],email = "doxtop"}]
+
+10> kvs:add(#writer{id=chain,args=#emails{email="maxim@synrc.com"}}).
+11> kvs:add(#writer{id=chain,args=#emails{email="vlad@synrc.com"}}).
+12> kvs:add(#writer{id=chain,args=#emails{email="doxtop@synrc.com"}}).
+13> kvs:all(chain).
+[#emails{id = 1555244691729330000,next = [],prev = [],
+         email = "maxim@synrc.com"},
+ #emails{id = 1555244699905648000,next = [],prev = [],
+         email = "doxtop@synrc.com"},
+ #emails{id = 1555244696660271000,next = [],prev = [],
+         email = "vlad@synrc.com"}]
+        </code>
+        </figure>
+
+        <p>Единственный тест на стримы, который проходит:</p>
+
+        <figure>
+        <code>
+> kvs:check().
+ok
+        </code>
+        </figure>
+
+      <h3>Документация</h3>
+
+       <p>Надеюсь сделать эту рубрику в release notes официальной и регулярной,
+          к сожалению, если не брать во внимание man страницы для модулей драйверов,
+          то остается всего два модуля для которых нужна документация — это <a href="https://kvs.n2o.dev/man/kvs.htm">kvs</a> и <a href="https://kvs.n2o.dev/man/kvs_stream.htm">kvs_stream</a>.
+          Я конечно добавил страницы формально для всех модулей, в будущем хочется
+          чтобы искусственный интеллект генерировал документацию. Еще я понял, что
+          ченджлог и релиз ноутсы в своём блоге отличный способ авторского анонсирования!
+          Сделал историю таких страниц в README.md.</p>
+
+      <h3>В заключение</h3>
+
+      <p>Репозиторий (который депендит медленно-компилирующийся <a href="https://gitlab.com/barrel-db/erlang-rocksdb">rocksdb NIF драйвер</a>
+         от Бенуа Кисенау, <a href="https://github.com/Vonmo/rocker">Rust-версию Rocker</a> от Максима Молчанова решил отложить,
+         слишком часто раст обновляется, нельзя зафризиться).
+         сразу включает конфигурационный файл для rocksdb:</p>
+
+         <p>— <a href="https://github.com/voxoz/kv">voxoz/kv</a></p>
+
+      <p>P.S. Встраивание в BTree можно применять не только в таких базах как rocksdb,
+         но и для mnesia и для любых баз вообще.</p>
+
+      <p>P.P.S. Можно также использовать rocksdb как драйвер для мнезиии (написаный
+         Ульфом Вигером для проекта Аэтернити), или скорее вид таблицы rocksdb_copies —
+         <a href="https://github.com/aeternity/mnesia_rocksdb">mnesia_rocksdb</a>.</p>
+
+    </section>
+</main>
+<footer>Namdak Tonpa <span class="heart">&nbsp;❤&nbsp;</span> 2009—2019</footer>
+
+
+</body>
+</html>

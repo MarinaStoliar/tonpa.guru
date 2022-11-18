@@ -336,6 +336,13 @@ end
            поля, Y &mdash; імʼя бізнес-обʼєкту, Z &mdash; тип форми (none, create, edit, search, view).
            У даному прикладі використовуються форма без модифікаторів (none).</p>
 
+        <p>Зверніть увагу, що id властивості елемнтів FORM.field повинні відповідати полям визначеним
+           в бізнес-обʼєкті EXO.client, інакше рендерер форми не зможе знайти інформацію про типи.
+           Кожна форма повинна визначати три обовʼязкові функції:
+           1) doc, яка повертає просто рядок пояюснюючий одним реченням для чого написана ця форма;
+           2) new, яка має три параметри: імʼя форми, бізнес-обʼєкт який потрібно візуалізувати, та можливі опції і повертає FORM.document і описом всіх полів, кнопок та секції;
+           3) id, яка повертає еталонний одиничний бізнес-обʼєкт за замовчуванням.
+
         <figure><code>
 > require EXO
 > EXO.client()
@@ -366,30 +373,28 @@ defmodule <font color=red>Client.Form</font> do
                      name: :proceed,
                      title: "Створити",
                      class: [:button,:sgreen],
-                     <font color=red>sources</font>: [:surnames_client_none,
-                               :names_client_none,
-                               :phone_client_none,
-                               :type_client_none],
+                     <font color=red>sources</font>: [<font color=red>:surnames_client_none, :names_client_none,
+                               :phone_client_none, :type_client_none</font>],
                      <font color=red>postback</font>: <font color=red>{:"CreateClient", :form.atom([:client,name])}</font>)],
         fields: [
-            FORM.field(id: :surnames,
-                     name: <font color=red>:surnames</font>,
+            FORM.field(id: <font color=red>:surnames</font>,
+                     name: :surnames,
                      type: :string,
                      title: "Прізвища:",
                      labelClass: :label),
-            FORM.field(id: :names,
-                     name: <font color=red>:names</font>,
+            FORM.field(id: <font color=red>:names</font>,
+                     name: :names,
                      type: :string,
                      title: "Імена",
                      labelClass: :label),
-            FORM.field(id: :phone,
-                     name: <font color=red>:phone</font>,
+            FORM.field(id: <font color=red>:phone</font>,
+                     name: :phone,
                      type: :string,
                      title: "Телефон",
                      labelClass: :label),
             FORM.field(
-                     id: :type,
-                     name: <font color=red>:type</font>,
+                     id: <font color=red>:type</font>,
+                     name: :type,
                      title: "Тип:",
                      type: :select,
                      default: :consumer,

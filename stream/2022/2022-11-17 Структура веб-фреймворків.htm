@@ -59,7 +59,7 @@
 
         <p><b>Дизайн (фронт-енд)</b></p>
 
-        <p>— Загальні стилі сторінки (SYNRC.CSS)<br>
+        <p>— Загальні стилі сторінки (BLANK.CSS)<br>
            — Стилі полів та форм (FORM.CSS)<br>
            — Стилі меню та сторінок адміністратора (ADMIN.CSS)</p>
 
@@ -92,14 +92,65 @@
            Для бізнес логіки використовується бібліотека BPE яка реалізує стандарт BPMN ISO 19510.
            Для розмежування прав доступу використовується бібліотека ABAC яка реалізує стандарт NIST на розмежування прав.</p>
 
-        <p>NOTE: Рівень бізнес логіки та розмежування прав доступу не використовується у цьому прикладі EXO.</p>
+        <p>NOTE: Рівень розмежування прав доступу не використовується у цьому прикладі EXO.
+           Рівень бізнес логіки використвується тільки в Адміністраторі BPE.
+           Рівень дизайну використовується але не пояснюється,
+           для детального огляду моделі CSS дивіться
+           <a href="https://n2o.dev/articles/css.htm">сторінку документації по стилям</a>.</p>
 
         <h3>Створення сторіники користувачів у прикладі EXO</h3>
 
         <h4>1. Створення статичного HTML контейнеру</h4>
 
+        <p>Кожна сторінка веб-фреймворку NITRO/N2O містить стандартну прелюдію,
+           яка підключає CSS файли стилів та JavaScript частину
+           бібліотек N2O/NITRO/FORM. Зазвичай ця частина спільна для усіх сторінок.</p>
+
         <figure><code>
-&lt;article>
+&lt;!DOCTYPE html>
+&lt;html>
+&lt;head>
+    &lt;meta charset="utf-8" />
+    &lt;meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    &lt;meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    &lt;meta name="description" content="" />
+    &lt;title>LOGIN&lt;/title>
+    &lt;link rel="stylesheet" href="css/blank.css" />
+    &lt;link rel="stylesheet" href="css/forms.css" />
+    &lt;link rel="stylesheet" href="css/admin.css" />
+&lt;/head>
+&lt;body>
+    &lt;nav>&lt;a href='login.htm' style="background:#ededed;">LOGIN&lt;/a>&lt;/nav>
+    &lt;aside>&lt;/aside>
+    &lt;main>&lt;/main>
+    &lt;script src='https://ws.n2o.dev/priv/utf8.js'>&lt;/script>
+    &lt;script src='https://ws.n2o.dev/priv/bert.js'>&lt;/script>
+    &lt;script src='https://ws.n2o.dev/priv/heart.js'>&lt;/script>
+    &lt;script src='https://ws.n2o.dev/priv/ieee754.js'>&lt;/script>
+    &lt;script src='https://ws.n2o.dev/priv/n2o.js'>&lt;/script>
+    &lt;script src='https://ws.n2o.dev/priv/ftp.js'>&lt;/script>
+    &lt;script src='https://nitro.n2o.dev/priv/js/nitro.js'>&lt;/script>
+    &lt;script>host = location.hostname; port = 8051;&lt;/script>
+    &lt;script>protos = [$bert]; N2O_start();&lt;/script>
+&lt;/body>
+&lt;/html>
+</code></figure>
+
+        <p>Такі сторінки називаються статичними ресурсами які можуть
+           віддаватися статичним HTTP сервером або через CDN. Після того
+           як сторінка завантажилась, вона запускає функію N2O_start,
+           яка створює WebSocket з'єднання та спілкується з
+           сервером (бек-ендом) відповідно до протоколу N2O/NITRO,
+           згідно якого клієнт (веб-браузер) виконує команди сервера, які 
+           модифікують сторінку (додають, змінюються або видаляють DOM елменти).</p>
+
+        <p>На цьому етапі придумуються унікальні імена DOM елементів (виділено
+           червоним) на статичній HTML сторінці, які у подальшому
+           будуть використовуватися в логіці контролера сторінки для їх модифікації.</p>
+
+        <figure><code>
+&lt;main>
+  &lt;article>
     &lt;section>
 	&lt;h2>КОРИСТУВАЧІ&lt;/h2>
         &lt;p>Додати користувачів в систему.&lt;/p>
@@ -113,10 +164,53 @@
             &lt;div id=<font color=red>tableRow</font>  class="trGroup"> &lt;/div>
         &lt;/div>
     &lt;br>
-&lt;/article>
+  &lt;/article>
+&lt;/main>
 </code></figure>
 
-        <h4>2. Створення контроллера сторінки</h4>
+        <p>Тут ми розміщуємо одну панель div для кнопки яка буде відкривати форму вводу клієнта ctrl,
+           одну панель div для самої форми вводу. І дві панелі для шабки та тіла таблиці клієнтів.</p>
+
+        <h4>2. Підключення контролера сторінки в роутер</h4>
+
+        <p>Основне завдання роутера довільного веб-фреймворку &mdash; це визначити контролер сторінки
+           який буде обробляти запит за наданою URL адресою звернення.
+           Роутер визначається на рівні бібліотеки N2O та повинен містит дві
+           обов'язкові фунції init та finish які будуть викликатися при кожному
+           зверненні по URL в браузері. Задача функції init покласти в
+           контекст N2O (об'єкт N2O.cx) ім'я модуля яке визначажться по URL запиту path за
+           допомогою функції route. Зверніть увагу що запити можуть здійснюватися як по
+           протоколу HTTP так і по протоколу WebSocket (які йдуть з префіксом /ws), тому
+           ми додатково це перевіряємо у фунції url.</p>
+
+        <figure><code>
+defmodule <font color=red>EXO.Route</font> do
+  require N2O
+  require Logger
+
+  def finish(state, ctx), do: {:ok, state, ctx}
+  def init(state, context) do
+      %{path: path} = N2O.cx(context, :req)
+      {:ok, state, N2O.cx(context, path: path, module: url(path))}
+  end
+
+  def url(<<"/ws/",p::binary>>) , do: route(p)
+  def url(<<"/",   p::binary>>) , do: route(p)
+  def url(p)                    , do: route(p)
+
+  def route(<<"app/backoffice/domains", _::binary>>), do: <font color=red>EXO.Domains</font>
+  def route(<<"app/login",              _::binary>>), do: EXO.Login
+  def route(""),                                      do: EXO.Login
+  def route(_) ,                                      do: EXO.Login
+
+end
+</code></figure>
+
+        <h4>3. Створення контроллера сторінки</h4>
+
+        <p>Тепер треба створити контролер з іменем EXO.Domains який повинен містити
+           лише одну обов'язкову функцію event, параметр якої і є повідомленням,
+           отриманим з веб сторінки.</p>
 
         <figure><code>
 defmodule <font color=red>EXO.Domains</font> do
@@ -133,31 +227,6 @@ defmodule <font color=red>EXO.Domains</font> do
 end
 </code></figure>
 
-        <h4>3. Підключення контролера сторінки в роутер</h4>
-
-        <figure><code>
-defmodule <font color=red>EXO.Route</font> do
-  require N2O
-  require Logger
-
-  def finish(state, ctx), do: {:ok, state, ctx}
-  def init(state, context) do
-      %{path: path} = N2O.cx(context, :req)
-      {:ok, state, N2O.cx(context, path: path, module: route_prefix(path))}
-  end
-
-  def route_prefix(<<"/ws/",p::binary>>) , do: route(p)
-  def route_prefix(<<"/",   p::binary>>) , do: route(p)
-  def route_prefix(p)                    , do: route(p)
-
-  def route(<<"app/login",   _::binary>>), do: BPE.Login
-  def route(<<"app/backoffice/domains", _::binary>>), do: EXO.Domains
-
-  def route(""), do: BPE.Login
-  def route(_) , do: BPE.Login
-
-end
-</code></figure>
 
         <h4>4. Створення бізнес-об'єктів та ініціалізація схеми</h4>
 
